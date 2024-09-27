@@ -10,6 +10,8 @@
 #include <arpa/inet.h>
 #include <fstream>
 #include <cmath>
+#include <chrono>
+#include <thread>
 #include "packetbase.hpp"
 #include "keysupplypacket.hpp"
 
@@ -176,14 +178,13 @@ int main()
 		uint32_t num = dura - past.count();
 		// printf("%u ", num);//still need to wait: ns.\n
 		std::this_thread::sleep_for(std::chrono::nanoseconds(num));
-		packet.PrintKeys("server.txt", "a+");
 		packet.PackTcpPacket(msg);
-		if (nsendSize = write(i_connfd_1, msg, MAX_DATA_SIZE+KEYSUPPLYHEADER+BASE_HEADER_SIZE) < 0)	
+		if ((nsendSize = write(i_connfd_1, msg, MAX_DATA_SIZE + KEYSUPPLYHEADER + BASE_HEADER_SIZE)) < 0)
 		{
 			printf("write Error: %s (errno: %d)\n", strerror(errno), errno);
 			exit(0);
 		}
-		else if (nsendSize = 0)
+		else if (nsendSize == 0)
 		{
 			printf("\nFailed to send keys to the client_1!\n");
 			exit(0);
@@ -192,12 +193,12 @@ int main()
 		{
 			printf("\nSucceed to send keys to the client_1!\n");
 		}
-		if (nsendSize = write(i_connfd_2, msg, MAX_DATA_SIZE+KEYSUPPLYHEADER+BASE_HEADER_SIZE) < 0)	
+		if ((nsendSize = write(i_connfd_2, msg, MAX_DATA_SIZE+KEYSUPPLYHEADER+BASE_HEADER_SIZE)) < 0)	
 		{
 			printf("write Error: %s (errno: %d)\n", strerror(errno), errno);
 			exit(0);
 		}
-		else if (nsendSize = 0)
+		else if (nsendSize == 0)
 		{
 			printf("\nFailed to send keys to the client_2!\n");
 			exit(0);

@@ -27,10 +27,11 @@ public:
     KeySupplyPacket(const KeySupplyPacket &other);
     KeySupplyPacket(KeySupplyPacket &&other) noexcept;
 
+
     uint8_t *getKeyBufferPtr();
     uint32_t *getSeqPtr();
+
     void ConstrctPacket(uint32_t seq, uint16_t length, uint8_t* keys);
-    void PrintKeys(const char * file_name, const char * operate);
     void PackTcpPacket(char* buf);
     void UnpackTcpPacket(char* buf);
 };

@@ -6,21 +6,24 @@
 #include <cstdint>
 #include <memory>
 
-// ???????????
+// 最大的数据长度
 #define MAX_BUFFER_SIZE 1024
 #define BASE_HEADER_SIZE 4
-constexpr size_t MAX_DATA_SIZE = 512;
+#define MAX_DATA_SIZE 512
 
-// ????Value?????????????????????????????в??????? value ?????
-enum class ValueType : uint16_t
+enum class PacketType : uint16_t
 {
     KEYSUPPLY = 0,
     KEYREQUEST,
+    KEYRETURN,
     OPENSESSION,
-    CLOSESESSION
+    CLOSESESSION,
+    SESSIONKEYSYNC,
+    MSG_TYPE_UNKNOWN,
+    ERRORMESSAGE
 };
 
-// ???? PacketBase ????????岢???? buffer_ ???
+// 假设 PacketBase 类已经定义并包含 buffer_ 成员
 class PacketBase
 {
 protected:
@@ -29,14 +32,13 @@ protected:
 
 public:
     PacketBase();
-    PacketBase(const PacketBase& other);
-    PacketBase(PacketBase&& other) noexcept;
+    PacketBase(const PacketBase &other);
+    PacketBase(PacketBase &&other) noexcept;
     virtual ~PacketBase();
 
-    uint8_t* getBufferPtr();
+    uint8_t *getBufferPtr();
     size_t getBufferSize() const;
     void setBufferSize(size_t size);
-
 };
 
 using PacketBasePtr = std::shared_ptr<PacketBase>;

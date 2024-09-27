@@ -7,8 +7,7 @@ PacketBase::PacketBase()
 }
 
 PacketBase::PacketBase(const PacketBase &other)
-    : buffer_size_(other.buffer_size_),
-      buffer_(other.buffer_size_ ? new uint8_t[other.buffer_size_]() : nullptr)
+    : buffer_(other.buffer_size_ ? new uint8_t[other.buffer_size_]() : nullptr), buffer_size_(other.buffer_size_)
 {
     if (buffer_)
         std::memcpy(buffer_, other.buffer_, buffer_size_);

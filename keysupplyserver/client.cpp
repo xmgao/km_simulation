@@ -100,7 +100,6 @@ int main()
 		else
 		{
 			packet.UnpackTcpPacket(msg);
-			packet.PrintKeys("client_1.txt", "a+");
 			// printf("Server return: %s\n", msg);
 		}
 		seq++;
