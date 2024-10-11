@@ -68,7 +68,7 @@ int main()
 	st_sersock.sin_addr.s_addr = htonl(INADDR_ANY); // INADDR_ANY转换过来就是0.0.0.0，泛指本机的意思，也就是表示本机的所有IP，因为有些机子不止一块网卡，多网卡的情况下，这个就表示所有网卡ip地址的意思。
 	st_sersock.sin_port = htons(IP_PORT);
 
-		int opt = 1;
+	int opt = 1;
 	// 设置端口复用	(解决端口被占用的问题)
 	if (setsockopt(i_listenfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) // 设置端口复用	(解决端口被占用的问题)
 	{
@@ -109,7 +109,7 @@ int main()
 		printf("Client[%d], welcome!\n", i_connfd_2);
 	}
 	uint32_t seq = 1;
-	char op;
+	int op;
 	char index[14][7] = {"231231", "240101", "240104", "240105", "240106", "240107", "240108", "240110", "240111", "240112", "240114", "240115", "240116", "240117"};
 	printf("please choose the channel attenuation cased by the environment (0-13):\n");
 	printf("0: 3.33dB(3.23dB) 98.522kbps;\n");
@@ -127,19 +127,19 @@ int main()
 	printf("12: 26.35dB(26.35dB) 0.235kbps;\n");
 	printf("13: ~0dB(~0dB) 100.98kbps;\n");
 	printf("Your option:");
-	op = getchar();
+	cin >> op;
 	char name[20] = "keyfile";
-	strcat(name, index[op-48]);
+	strcat(name, index[op]);
 	strcat(name, ".kf");
 	// printf("%s", name);
 	uint8_t timestamp[8], length[2];
-	uint8_t* block;
+	uint8_t *block;
 	uint64_t pre_ts, af_ts, dura;
-	FILE* fp;
+	FILE *fp;
 	fp = fopen(name, "rb+");
 	fread(timestamp, sizeof(uint8_t), 8, fp);
 	pre_ts = timestamp[7];
-	for(int i = 6; i >= 0; i--)
+	for (int i = 6; i >= 0; i--)
 	{
 		pre_ts = pre_ts * 256 + timestamp[i];
 	}
@@ -148,27 +148,27 @@ int main()
 		KeySupplyPacket packet;
 		auto start = std::chrono::system_clock::now();
 		fread(length, sizeof(uint8_t), 2, fp);
-		uint16_t len = length[1]*256+length[0];
-		if(len <= MAX_DATA_SIZE)
+		uint16_t len = length[1] * 256 + length[0];
+		if (len <= MAX_DATA_SIZE)
 		{
-			block = (uint8_t*)malloc(len);
+			block = (uint8_t *)malloc(len);
 		}
 		else
 		{
 			printf("\nthe size of key is too large!\n");
 			exit(0);
 		}
-		char msg[len+KEYSUPPLYHEADER+BASE_HEADER_SIZE];
+		char msg[len + KEYSUPPLYHEADER + BASE_HEADER_SIZE];
 		memset(msg, 0, sizeof(msg));
-		fread(block, sizeof(uint8_t), length[1]*256+length[0], fp);
-		packet.ConstrctPacket(seq, len, block);
+		fread(block, sizeof(uint8_t), length[1] * 256 + length[0], fp);
+		packet.ConstrctPacket(seq, len + 4, block);
 		fread(timestamp, sizeof(uint8_t), 8, fp);
 		af_ts = timestamp[7];
-		for(int i = 6; i >= 0; i--)
+		for (int i = 6; i >= 0; i--)
 		{
 			af_ts = af_ts * 256 + timestamp[i];
 		}
-		dura = af_ts-pre_ts;
+		dura = af_ts - pre_ts;
 		// printf("%lu ", dura);//the duration is ns.\n
 		pre_ts = af_ts;
 		// count = count-1;
@@ -193,7 +193,7 @@ int main()
 		{
 			printf("\nSucceed to send keys to the client_1!\n");
 		}
-		if ((nsendSize = write(i_connfd_2, msg, MAX_DATA_SIZE+KEYSUPPLYHEADER+BASE_HEADER_SIZE)) < 0)	
+		if ((nsendSize = write(i_connfd_2, msg, MAX_DATA_SIZE + KEYSUPPLYHEADER + BASE_HEADER_SIZE)) < 0)
 		{
 			printf("write Error: %s (errno: %d)\n", strerror(errno), errno);
 			exit(0);

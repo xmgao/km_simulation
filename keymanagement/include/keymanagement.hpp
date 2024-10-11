@@ -35,7 +35,9 @@ public:
 private:
     std::mutex mutex_;
     // 当前密钥池的密钥文件个数
-    int count;
+    int count_;
+    // 当前密钥池已使用的密钥文件个数
+    int delete_count_;
     // 当前按照顺序的最小奇数密钥序号
     int seq_odd_inorder_;
     // 当前按照顺序的最小偶数密钥序号

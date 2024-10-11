@@ -107,7 +107,7 @@ void Server::handleMessage(int fd)
         MessageHandler handler = global_registry.getHandler(type);
         if (handler)
         {
-            handler(fd, pkt1);
+            handler(fd, pkt1);    // 一个主调度器，用函数指针和回调函数的形式分发处理任务
         }
         else
         {

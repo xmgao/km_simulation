@@ -13,7 +13,7 @@ extern KeyManager globalKeyManager;
 
 // 构造函数
 KeyManager::KeyManager()
-    : count(0), seq_odd_inorder_(1), seq_even_inorder_(2)
+    : count_(0), delete_count_(0), seq_odd_inorder_(1), seq_even_inorder_(2)
 {
     // 如果还需要初始化文件系统部分，可以继续保留
 }
@@ -25,7 +25,7 @@ void KeyManager::addKey(int seq, const uint8_t *keyValue, size_t keySize)
     // 将密钥转换为字符串形式并添加到map中
     std::string keyValueStr(keyValue, keyValue + keySize);
     keyMap_[seq] = keyValueStr;
-    count++;
+    count_++;
 }
 
 // 获取密钥，通过SEQ读取
@@ -49,7 +49,7 @@ int KeyManager::getKeyinOrder(bool odd_number)
 
     if (odd_number)
     {
-        while (seq_odd_inorder_ <= 2 * count)
+        while (seq_odd_inorder_ <= 2 * count_)
         {
             auto it = keyMap_.find(seq_odd_inorder_);
             if (it != keyMap_.end())
@@ -66,7 +66,7 @@ int KeyManager::getKeyinOrder(bool odd_number)
     }
     else
     {
-        while (seq_even_inorder_ <= 2 * count)
+        while (seq_even_inorder_ <= 2 * count_)
         {
             auto it = keyMap_.find(seq_even_inorder_);
             if (it != keyMap_.end())
@@ -92,33 +92,42 @@ void KeyManager::removeKey(int seq)
     if (it != keyMap_.end())
     {
         keyMap_.erase(seq);
-        count--;
+        count_--;
+        delete_count_++;
     }
 }
 
 void KeyManager::monitorKeyRate()
 {
     using namespace std::chrono;
-    int last_timestamp = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-    int last_keypool_size = count;
+    int last_timestamp = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count_();
+    int last_keypool_size = count_ + delete_count_;
+    int last_used_size = delete_count_;
 
     while (true)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // 每秒检测一次
 
-        int current_timestamp = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-        int current_keypool_size = count;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // 每秒检测一次
+        //上锁，进入临界区
+        std::lock_guard<std::mutex> lock(mutex_);
+        int current_timestamp = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count_();
+        int current_keypool_size = count_ + delete_count_;
+        int current_used_size = delete_count_;
 
         int delta_timestamp = current_timestamp - last_timestamp; // 时间差，毫秒
         int delta_keypool_size = current_keypool_size - last_keypool_size;
+        int delta_used_size = current_used_size - last_used_size;
 
-        float keyrate = static_cast<float>(delta_keypool_size * KEY_UNIT_SIZE) / (delta_timestamp / 1000.0);
+        float generate_keyrate = static_cast<float>(delta_keypool_size * KEY_UNIT_SIZE) / (delta_timestamp / 1000.0);
+        float consume_keyrate = static_cast<float>(delta_used_size * KEY_UNIT_SIZE) / (delta_timestamp / 1000.0);
 
-        //std::cout << "Key rate: " << keyrate << " bps" << std::endl;
-
+        std::cout << "generate Key rate: " << generate_keyrate << " bps" << std::endl;
+        std::cout << "consume Key rate: " << consume_keyrate << " bps" << std::endl;
         // 更新时间戳和密钥池大小
         last_timestamp = current_timestamp;
         last_keypool_size = current_keypool_size;
+        last_used_size = current_used_size;
+        //离开作用域时, lock对象销毁，自动解锁
     }
 }
 

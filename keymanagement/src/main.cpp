@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
     global_registry.registerHandler(PacketType::CLOSESESSION, handleCloseSessionPacket);
     global_registry.registerHandler(PacketType::MSG_TYPE_UNKNOWN, handleUnknownPacket);
 
-    // 一个主调度器，用函数指针和回调函数的形式分发处理任务
+
     Server server1(LISTEN_PORT);
     std::cout << "begin globalKeyManager!" << std::endl;
     globalKeyManager.run(server1, keysupply_ipAddress, keysuply_port);
