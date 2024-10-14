@@ -32,8 +32,6 @@ public:
     uint32_t *getSeqPtr();
 
     void ConstrctPacket(uint32_t seq, uint16_t length, uint8_t* keys);
-    void PackTcpPacket(char* buf);
-    void UnpackTcpPacket(char* buf);
 };
 
 using KeySupplyPacketPtr = std::shared_ptr<KeySupplyPacket>;
