@@ -12,7 +12,7 @@
  *        |<---------12 bytes max------------>|
  */
 
-#define SESSIONKEYSYNCHEADER 8
+#define SESSIONKEYSYNC_HEADER_SIZE 8
 
 class SessionKeySyncPacket : public PacketBase
 {

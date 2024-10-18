@@ -18,8 +18,8 @@ enum class PacketType : uint16_t
     OPENSESSION,
     CLOSESESSION,
     SESSIONKEYSYNC,
-    MSG_TYPE_UNKNOWN,
-    ERRORMESSAGE
+    CONFIRMMESSAGE,
+    MSG_TYPE_UNKNOWN
 };
 
 // 假设 PacketBase 类已经定义并包含 buffer_ 成员

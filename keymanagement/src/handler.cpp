@@ -25,22 +25,30 @@ void handleOpenSessionPacket(int fd, PacketBase &pkt1)
     uint32_t sourceip = *pkt2.getsourcePtr();
     uint32_t desip = *pkt2.getdesPtr();
     uint32_t session_id = *pkt2.getsessidPtr();
-    bool is_outbound = *pkt2.getoutboundPtr();
+    bool is_inbound = *pkt2.getinboundPtr();
     if (DEBUG_LEVEL == 1)
     {
         std::cout << "Received OPENSESSION packet: "
                   << " source_ip: " << uint32ToIpString(sourceip)
                   << " dest_ip: " << uint32ToIpString(desip)
                   << " session_id: " << session_id
-                  << " is_outbound: " << is_outbound
+                  << " is_inbound: " << is_inbound
                   << std::endl;
     }
-    if (!globalSessionManager.addSession(sourceip, desip, session_id, is_outbound))
+    bool result = globalSessionManager.addSession(sourceip, desip, session_id, is_inbound);
+    // 根据操作结果生成不同的响应包
+    ConfirmMessagePacket pktConfirm;
+    if (result)
     {
-        ErrorMessagePacket pkt3;
-        pkt3.constructErrorMessagePacket(static_cast<uint32_t>(ErrorType::OPENSESSIONERROR));
-        send(fd, pkt3.getBufferPtr(), pkt3.getBufferSize(), 0);
+        // 成功响应包
+        pktConfirm.constructConfirmMessagePacket(static_cast<uint32_t>(ErrorCode::SUCCESS));
     }
+    else
+    {
+        // 错误响应包
+        pktConfirm.constructConfirmMessagePacket(static_cast<uint32_t>(ErrorCode::OPENSESSIONERROR));
+    }
+    send(fd, pktConfirm.getBufferPtr(), pktConfirm.getBufferSize(), 0);
 }
 
 // 处理KEYREQUEST
@@ -68,9 +76,10 @@ void handleKeyRequestPacket(int fd, PacketBase &pkt1)
     std::string getkeyvalue = globalSessionManager.getKey(session_id, request_id, request_len);
     if (getkeyvalue == "")
     {
-        ErrorMessagePacket pkt3;
-        pkt3.constructErrorMessagePacket(static_cast<uint32_t>(ErrorType::GETKEYERROR));
-        send(fd, pkt3.getBufferPtr(), pkt3.getBufferSize(), 0);
+        ConfirmMessagePacket pktConfirm;
+        // 错误响应包
+        pktConfirm.constructConfirmMessagePacket(static_cast<uint32_t>(ErrorCode::GETKEYERROR));
+        send(fd, pktConfirm.getBufferPtr(), pktConfirm.getBufferSize(), 0);
         std::cerr << "Failed to get key! " << std::endl;
         return;
     }
@@ -93,14 +102,14 @@ void handleCloseSessionPacket(int fd, PacketBase &pkt1)
     uint32_t sourceip = *pkt2.getsourcePtr();
     uint32_t desip = *pkt2.getdesPtr();
     uint32_t session_id = *pkt2.getsessidPtr();
-    bool is_outbound = *pkt2.getoutboundPtr();
+    bool is_inbound = *pkt2.getinboundPtr();
     if (DEBUG_LEVEL == 1)
     {
         std::cout << "Received CLOSESESSION packet: "
                   << " source_ip: " << uint32ToIpString(sourceip)
                   << " dest_ip: " << uint32ToIpString(desip)
                   << " session_id: " << session_id
-                  << " is_outbound: " << is_outbound
+                  << " is_inbound: " << is_inbound
                   << std::endl;
     }
     globalSessionManager.closeSession(session_id);
@@ -125,7 +134,7 @@ void handleKeySupplyPacket(int fd, PacketBase &pkt1)
                   << std::endl;
     }
     // 添加密钥
-    globalKeyManager.addKey(*pkt2.getSeqPtr(), pkt2.getKeyBufferPtr(), length - KEYSUPPLYHEADER);
+    globalKeyManager.addKey(*pkt2.getSeqPtr(), pkt2.getKeyBufferPtr(), length - KEYSUPPLY_HEADER_SIZE);
 }
 
 // 处理SESSIONKEYSYNC
@@ -165,9 +174,10 @@ void handleUnknownPacket(int fd, PacketBase &pkt)
         // 继续读取，直到缓冲区为空
     }
     // 简单回复
-    ErrorMessagePacket pkt3;
-    pkt3.constructErrorMessagePacket(static_cast<uint32_t>(ErrorType::UNKONWNMESSAGE));
-    send(fd, pkt3.getBufferPtr(), pkt3.getBufferSize(), 0);
+    ConfirmMessagePacket pktConfirm;
+    // 错误响应包
+    pktConfirm.constructConfirmMessagePacket(static_cast<uint32_t>(ErrorCode::UNKONWNMESSAGE));
+    send(fd, pktConfirm.getBufferPtr(), pktConfirm.getBufferSize(), 0);
     close(fd);
 }
 

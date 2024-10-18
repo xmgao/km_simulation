@@ -23,8 +23,8 @@ struct SessionData
     uint32_t desip_;
     int index_ = 0;
     int fd_ = -1;
-    // 标识是主动端还是被动端,true如果是主动端
-    bool is_outbound_;
+    // 标识是主动端还是被动端,false如果是主动端
+    bool is_inbound_;
     // 新增成员：用于存储使用过的seq的队列
     std::queue<int> usedSeq;
 };
@@ -36,7 +36,7 @@ public:
     SessionManager();
 
     // 新建会话
-    bool addSession(uint32_t sourceip, uint32_t desip, uint32_t session_id,bool is_outbound);
+    bool addSession(uint32_t sourceip, uint32_t desip, uint32_t session_id,bool is_inbound);
 
     // 通知被动端创建会话
     bool noticePassiveSession(SessionData &data, uint32_t session_id);

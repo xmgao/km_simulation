@@ -1,9 +1,9 @@
 #ifndef DEBUG_HPP
 #define DEBUG_HPP
 
-#include "errormessgepacket.hpp"
+#include "confirmmessagepacket.hpp"
 
-#define DEBUG_LEVEL 2
+#define DEBUG_LEVEL 1
 
 
 #endif

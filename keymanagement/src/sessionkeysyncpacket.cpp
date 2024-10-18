@@ -34,9 +34,9 @@ void SessionKeySyncPacket::constructsessionkeysyncpacket(uint32_t session_id, ui
 {
     uint16_t intvalue = static_cast<uint16_t>(PacketType::SESSIONKEYSYNC);
     std::memcpy(this->getBufferPtr(), &intvalue, sizeof(uint16_t));
-    uint16_t length = SESSIONKEYSYNCHEADER;
+    uint16_t length = SESSIONKEYSYNC_HEADER_SIZE;
     std::memcpy(this->getBufferPtr() + sizeof(uint16_t), &length, sizeof(uint16_t));
-    this->setBufferSize(BASE_HEADER_SIZE + SESSIONKEYSYNCHEADER);
+    this->setBufferSize(BASE_HEADER_SIZE + SESSIONKEYSYNC_HEADER_SIZE);
     *this->sessionkeysync_sessionid_ptr_ = session_id;
     *this->sessionkeysync_keyseq_ptr_ = keyseq;
 }

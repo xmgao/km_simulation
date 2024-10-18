@@ -3,7 +3,7 @@
 
 #include "packetbase.hpp"
 
-#define KEYSUPPLYHEADER 4
+#define KEYSUPPLY_HEADER_SIZE 4
 
 /**
  * @brief structure:

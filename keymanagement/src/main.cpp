@@ -14,6 +14,9 @@ KeyManager globalKeyManager;
 // 创建并注册消息处理器
 MessageHandlerRegistry global_registry;
 
+//KM监听外部端口
+int LISTEN_PORT = 50000;
+
 int main(int argc, char *argv[])
 {
     if (argc != 3)

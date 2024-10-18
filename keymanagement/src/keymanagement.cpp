@@ -100,7 +100,7 @@ void KeyManager::removeKey(int seq)
 void KeyManager::monitorKeyRate()
 {
     using namespace std::chrono;
-    int last_timestamp = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count_();
+    int last_timestamp = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
     int last_keypool_size = count_ + delete_count_;
     int last_used_size = delete_count_;
 
@@ -110,7 +110,7 @@ void KeyManager::monitorKeyRate()
         std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // 每秒检测一次
         //上锁，进入临界区
         std::lock_guard<std::mutex> lock(mutex_);
-        int current_timestamp = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count_();
+        int current_timestamp = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
         int current_keypool_size = count_ + delete_count_;
         int current_used_size = delete_count_;
 

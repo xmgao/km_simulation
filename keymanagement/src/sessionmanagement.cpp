@@ -6,6 +6,7 @@
 extern KeyManager globalKeyManager;
 // 声明全局变量，但不定义
 extern SessionManager globalSessionManager;
+extern int LISTEN_PORT;
 
 SessionManager::SessionManager()
     : session_number(0) {}
@@ -68,14 +69,14 @@ bool SessionManager::addPassiveKey(uint32_t session_id, uint32_t key_seqnum)
 
 
 
-bool SessionManager::addSession(uint32_t sourceip, uint32_t desip, uint32_t session_id, bool is_outbound)
+bool SessionManager::addSession(uint32_t sourceip, uint32_t desip, uint32_t session_id, bool is_inbound)
 {
     std::lock_guard<std::mutex> lock(mutex_);
     // 检查session_id是否已存在
     auto it = SessionkeyCache_.find(session_id);
     if (it != SessionkeyCache_.end())
     {
-        if (it->second.is_outbound_)
+        if (!it->second.is_inbound_)
         {
             std::cerr << "session already exists" << std::endl;
             return false; // 主动端会话已存在
@@ -91,9 +92,9 @@ bool SessionManager::addSession(uint32_t sourceip, uint32_t desip, uint32_t sess
     newSessionData.desip_ = desip;
     newSessionData.session_id_ = session_id;
     // 判断是否是主动端
-    if (is_outbound)
+    if (!is_inbound)
     {
-        newSessionData.is_outbound_ = true;
+        newSessionData.is_inbound_ = false;
 
         // 通知被动端创建会话
         noticePassiveSession(newSessionData, session_id);
@@ -107,7 +108,7 @@ bool SessionManager::addSession(uint32_t sourceip, uint32_t desip, uint32_t sess
     }
     else
     {
-        newSessionData.is_outbound_ = false;
+        newSessionData.is_inbound_ = true;
     }
 
     SessionkeyCache_[session_id] = newSessionData;
@@ -124,7 +125,7 @@ bool SessionManager::noticePassiveSession(SessionData &data, uint32_t session_id
         return false;
     }
     OpenSessionPacket pkt1;
-    pkt1.constructopensessionpacket(data.sourceip_, data.desip_, session_id, false);
+    pkt1.constructopensessionpacket(data.sourceip_, data.desip_, session_id, true);
 
     ssize_t bytesSent = send(data.fd_, pkt1.getBufferPtr(), pkt1.getBufferSize(), 0);
     if (bytesSent == -1)
@@ -147,7 +148,7 @@ std::string SessionManager::getKey(uint32_t session_id, uint32_t request_id, uin
         int useful_size = it->second.keyValue.size() - it->second.index_;
         while (useful_size < request_len)
         {
-            if (it->second.is_outbound_)
+            if (it->second.is_inbound_)
             {
                 if (!addProactiveKey(it->second))
                 {

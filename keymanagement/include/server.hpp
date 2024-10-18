@@ -14,7 +14,6 @@
 #include <unistd.h> // for close()
 
 
-const int LISTEN_PORT = 50000;
 
 class Server
 {

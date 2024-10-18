@@ -3,7 +3,7 @@
 
 #include "packetbase.hpp"
 
-#define KEYREQUESTHEADER 10
+#define KEYREQUEST_HEADER_SIZE 10
 /**
  * @brief structure:
  *        |<-4 bytes->|<-4 bytes->|<-4 bytes->|<-2 bytes->|<----------512 bytes---------->|
