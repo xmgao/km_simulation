@@ -1,41 +1,46 @@
-
 #include "server.hpp"
 #include "sessionmanagement.hpp"
 #include "handler.hpp"
 #include <thread>
-#include <cstdlib> // for std::atoi
 
-// 全局sessionManager实例
 SessionManager globalSessionManager;
-
-// 全局KeyManager实例
 KeyManager globalKeyManager;
-
-// 创建并注册消息处理器
 MessageHandlerRegistry global_registry;
 
-//KM监听外部端口
+// KM监听外部端口
 int LISTEN_PORT = 50000;
+
+// 检查并返回有效的端口号
+int verifyPortNumber(const std::string &portStr)
+{
+    try
+    {
+        int port = std::stoi(portStr);
+        if (port > 0 && port <= 65535)
+        {
+            return port;
+        }
+    }
+    catch (const std::invalid_argument &e)
+    {
+        // 忽略，不打印异常，因为后续有错误提示
+    }
+    std::cerr << "Invalid keysupply port number. Must be between 1 and 65535." << std::endl;
+    std::exit(1);
+}
 
 int main(int argc, char *argv[])
 {
     if (argc != 3)
     {
-        std::cerr << "Usage: " << argv[0] << " <keysupply IP address> <keysuply_port>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " <keysupply IP address> <keysupply port>" << std::endl;
         return 1;
     }
 
-    std::string keysupply_ipAddress = argv[1];
-    int keysuply_port = std::atoi(argv[2]);
+    const std::string keysupply_ipAddress = argv[1];
+    const int keysupply_port = verifyPortNumber(argv[2]);
 
-    // 端口号范围验证
-    if (keysuply_port <= 0 || keysuply_port > 65535)
-    {
-        std::cerr << "Invalid keysuply_port number. Must be between 1 and 65535." << std::endl;
-        return 1;
-    }
-
-    std::cout << "begin register!" << std::endl;
+    std::cout << "Registering message handlers..." << std::endl;
     global_registry.registerHandler(PacketType::OPENSESSION, handleOpenSessionPacket);
     global_registry.registerHandler(PacketType::KEYREQUEST, handleKeyRequestPacket);
     global_registry.registerHandler(PacketType::KEYSUPPLY, handleKeySupplyPacket);
@@ -43,11 +48,11 @@ int main(int argc, char *argv[])
     global_registry.registerHandler(PacketType::CLOSESESSION, handleCloseSessionPacket);
     global_registry.registerHandler(PacketType::MSG_TYPE_UNKNOWN, handleUnknownPacket);
 
-
     Server server1(LISTEN_PORT);
-    std::cout << "begin globalKeyManager!" << std::endl;
-    globalKeyManager.run(server1, keysupply_ipAddress, keysuply_port);
-    std::cout << "begin server1.run!" << std::endl;
+    std::cout << "Running globalKeyManager..." << std::endl;
+    globalKeyManager.run(server1, keysupply_ipAddress, keysupply_port);
+
+    std::cout << "Starting server on port " << LISTEN_PORT << "..." << std::endl;
     server1.run();
 
     return 0;

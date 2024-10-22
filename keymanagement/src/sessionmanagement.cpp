@@ -1,117 +1,100 @@
 #include "sessionmanagement.hpp"
 #include "server.hpp"
-#include "opensessionpacket.hpp"
+#include "packet/packets.hpp"
 #include "debuglevel.hpp"
 
+namespace
+{
+    void logError(const std::string &message)
+    {
+        std::cerr << message << std::endl;
+    }
+
+    void logInfo(const std::string &message)
+    {
+        std::cout << message << std::endl;
+    }
+}
+
 extern KeyManager globalKeyManager;
-// 声明全局变量，但不定义
-extern SessionManager globalSessionManager;
 extern int LISTEN_PORT;
 
-SessionManager::SessionManager()
-    : session_number(0) {}
+SessionManager::SessionManager() : session_number(0) {}
 
 void keysync(SessionData &data, uint32_t keyseqnum)
 {
     SessionKeySyncPacket pkt1;
     pkt1.constructsessionkeysyncpacket(data.session_id_, keyseqnum);
-    ssize_t bytesSent = send(data.fd_, pkt1.getBufferPtr(), pkt1.getBufferSize(), 0);
-    if (bytesSent == -1)
+    if (send(data.fd_, pkt1.getBufferPtr(), pkt1.getBufferSize(), 0) == -1)
     {
-        std::cerr << "Failed to send message: " << std::endl;
+        logError("Failed to send message during key synchronization.");
     }
 }
 
-bool addProactiveKey(SessionData &data)
+bool addKeyToSession(SessionData &data, bool isProactive)
 {
-    std::string key;
-    // 示例生成密钥的逻辑
-    bool is_odd = data.sourceip_ > data.desip_ ? true : false;
-    int seq = globalKeyManager.getKeyinOrder(is_odd);
+    int seq = globalKeyManager.getKeyinOrder(data.sourceip_ > data.desip_);
     if (seq == -1)
     {
-        // 错误处理
-        std::cerr << "failed to find useful seq." << std::endl;
+        logError("Failed to find a useful sequence number.");
         return false;
     }
+
     data.usedSeq.push(seq);
-    std::string keyValue1 = globalKeyManager.getKey(seq);
-    // 用完删除密钥
+    std::string keyValue = globalKeyManager.getKey(seq);
     globalKeyManager.removeKey(seq);
-    // 将 keyValue 插入 SessionkeyCache_[i] 的末尾
-    data.keyValue.insert(data.keyValue.end(), keyValue1.begin(), keyValue1.end());
-    //密钥同步
-    keysync(data,seq);
+
+    data.keyValue.insert(data.keyValue.end(), keyValue.begin(), keyValue.end());
+
+    if (isProactive)
+    {
+        keysync(data, seq);
+    }
+
     return true;
 }
 
 bool SessionManager::addPassiveKey(uint32_t session_id, uint32_t key_seqnum)
 {
+    std::lock_guard<std::mutex> lock(mutex_);
     auto it = SessionkeyCache_.find(session_id);
     if (it != SessionkeyCache_.end())
     {
-        // 返回找到的密钥
-        std::string keyValue1 = globalKeyManager.getKey(key_seqnum);
-        // 用完删除密钥
-        globalKeyManager.removeKey(key_seqnum);
         it->second.usedSeq.push(key_seqnum);
-        // 将 keyValue 插入 SessionkeyCache_[i] 的末尾
-        it->second.keyValue.insert(it->second.keyValue.end(), keyValue1.begin(), keyValue1.end());
+        std::string keyValue = globalKeyManager.getKey(key_seqnum);
+        globalKeyManager.removeKey(key_seqnum);
+        it->second.keyValue.insert(it->second.keyValue.end(), keyValue.begin(), keyValue.end());
         return true;
     }
-    else
-    {
-        // 错误处理
-        std::cerr << "failed to find session:" << session_id << std::endl;
-        return false;
-    }
+    logError("Failed to find session: " + std::to_string(session_id));
+    return false;
 }
-
-
 
 bool SessionManager::addSession(uint32_t sourceip, uint32_t desip, uint32_t session_id, bool is_inbound)
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    // 检查session_id是否已存在
     auto it = SessionkeyCache_.find(session_id);
     if (it != SessionkeyCache_.end())
     {
         if (!it->second.is_inbound_)
         {
-            std::cerr << "session already exists" << std::endl;
-            return false; // 主动端会话已存在
+            logError("Session already exists.");
+            return false;
         }
-        else
-        {
-            return true; // 被动端会话可以先由主动端KM创建
-        }
+        return true;
     }
-    // 创建新的KeyData对象并插入映射
+
     SessionData newSessionData;
     newSessionData.sourceip_ = sourceip;
     newSessionData.desip_ = desip;
     newSessionData.session_id_ = session_id;
-    // 判断是否是主动端
-    if (!is_inbound)
+    newSessionData.is_inbound_ = is_inbound;
+    if (!is_inbound && !noticePassiveSession(newSessionData, session_id))
     {
-        newSessionData.is_inbound_ = false;
-
-        // 通知被动端创建会话
-        noticePassiveSession(newSessionData, session_id);
-        // 提前插入一块密钥,被动端不需要提前，需要从主动端同步
-        if (!addProactiveKey(newSessionData))
-        {
-            // 错误处理
-            std::cerr << "generatekey failed." << std::endl;
-            return false;
-        } // 假设有一个生成密钥的函数
+        logError("Failed to open session!.");
+        return false;
     }
-    else
-    {
-        newSessionData.is_inbound_ = true;
-    }
-
-    SessionkeyCache_[session_id] = newSessionData;
+    SessionkeyCache_[session_id] = std::move(newSessionData);
     ++session_number;
     return true;
 }
@@ -121,54 +104,85 @@ bool SessionManager::noticePassiveSession(SessionData &data, uint32_t session_id
     data.fd_ = connectToServer(uint32ToIpString(data.desip_), LISTEN_PORT);
     if (data.fd_ == -1)
     {
-        std::cerr << "Connection failed: " << std::endl;
+        logError("Connection failed.");
         return false;
     }
+
     OpenSessionPacket pkt1;
     pkt1.constructopensessionpacket(data.sourceip_, data.desip_, session_id, true);
-
-    ssize_t bytesSent = send(data.fd_, pkt1.getBufferPtr(), pkt1.getBufferSize(), 0);
-    if (bytesSent == -1)
+    if (send(data.fd_, pkt1.getBufferPtr(), pkt1.getBufferSize(), 0) == -1)
     {
-        std::cerr << "Failed to send message: " << std::endl;
+        logError("Failed to send open session packet.");
+        close(data.fd_);
+        return false;
+    }
+    // 处理返回结果
+    ConfirmMessagePacket response_pkt;
+
+    // 读取 packet header
+    ssize_t bytes_read = read(data.fd_, response_pkt.getBufferPtr(), BASE_HEADER_SIZE);
+    if (bytes_read <= 0)
+    {
+        logError("Failed to read response header or connection closed.");
+        close(data.fd_);
         return false;
     }
 
-    return true;
+    uint16_t value1, length;
+    std::memcpy(&value1, response_pkt.getBufferPtr(), sizeof(uint16_t));
+    std::memcpy(&length, response_pkt.getBufferPtr() + sizeof(uint16_t), sizeof(uint16_t));
+
+    // 读取 payload
+    bytes_read = read(data.fd_, response_pkt.getBufferPtr() + BASE_HEADER_SIZE, length);
+    if (bytes_read != length)
+    {
+        logError("Incomplete payload read. Expected: " + std::to_string(length) + ", got: " + std::to_string(bytes_read));
+        close(data.fd_);
+        return false;
+    }
+
+    response_pkt.setBufferSize(BASE_HEADER_SIZE + length);
+
+    if (value1 == static_cast<uint16_t>(PacketType::CONFIRMMESSAGE))
+    {
+        if (*response_pkt.geterrortypePtr() == static_cast<uint32_t>(ErrorCode::SUCCESS))
+        {
+            return true;
+        }
+        else
+        {
+            logError("Cannot open passive session, error code: " + std::to_string(*response_pkt.geterrortypePtr()));
+        }
+    }
+    else
+    {
+        logError("Received unexpected message type: " + std::to_string(value1));
+    }
+    close(data.fd_);
+    return false;
 }
 
-std::string SessionManager::getKey(uint32_t session_id, uint32_t request_id, uint16_t request_len)
+std::string SessionManager::getSessionKey(uint32_t session_id, uint32_t request_id, uint16_t request_len)
 {
-
+    std::lock_guard<std::mutex> lock(mutex_);
     auto it = SessionkeyCache_.find(session_id);
     if (it != SessionkeyCache_.end())
     {
-        // 返回找到的密钥
-
-        int useful_size = it->second.keyValue.size() - it->second.index_;
-        while (useful_size < request_len)
+        while (it->second.keyValue.size() - it->second.index_ < request_len)
         {
-            if (it->second.is_inbound_)
+            if (!it->second.is_inbound_ || !addKeyToSession(it->second, true))
             {
-                if (!addProactiveKey(it->second))
-                {
-                    // 错误处理
-                    std::cerr << "addproactivekey failed." << std::endl;
-                    return "";
-                } // 主动端补充密钥
-            }
-            else
-            {
+                logError("Insufficient key materials.");
                 return "";
-                // 被动端返回空密钥
             }
-            useful_size = it->second.keyValue.size() - it->second.index_;
         }
-        std::string returnkeyvalue(it->second.keyValue.begin() + it->second.index_, it->second.keyValue.begin() + it->second.index_ + request_len);
+        auto start = it->second.keyValue.begin() + it->second.index_;
+        std::string returnKey(start, start + request_len);
         it->second.index_ += request_len;
-        return returnkeyvalue;
+        return returnKey;
     }
-    return ""; // 如果未找到，返回空字符串
+    logError("Session not found.");
+    return "";
 }
 
 bool SessionManager::closeSession(uint32_t session_id)
@@ -179,13 +193,9 @@ bool SessionManager::closeSession(uint32_t session_id)
     {
         SessionkeyCache_.erase(it);
         --session_number;
-        std::cout << "closeSession success!session id:" << session_id << std::endl;
+        logInfo("Session closed successfully: " + std::to_string(session_id));
         return true;
     }
-    else
-    {
-        // 错误处理
-        std::cerr << "closeSession failed!Unable to find session" << std::endl;
-    }
+    logError("Close session failed: Unable to find session " + std::to_string(session_id));
     return false;
 }

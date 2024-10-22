@@ -13,8 +13,6 @@
 #include <sys/socket.h>
 #include <unistd.h> // for close()
 
-
-
 class Server
 {
 public:

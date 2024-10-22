@@ -7,7 +7,7 @@
 #include <mutex>
 #include <cstdint>
 #include <iomanip>
-
+#include <unordered_map>
 
 class KeyManager
 {
@@ -43,7 +43,7 @@ private:
     // 当前按照顺序的最小偶数密钥序号
     int seq_even_inorder_;
     
-    std::map<int, std::string> keyMap_; // 用于存储密钥,密钥块用char buffer[]或vector<unint_8>
+    std::unordered_map<int, std::string> keyMap_; // 用于存储密钥,密钥块用char buffer[]或vector<unint_8>
 };
 
 

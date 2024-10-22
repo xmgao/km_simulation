@@ -2,11 +2,9 @@
 #define SESSIONMANAGEMENT_HPP
 
 #include "keymanagement.hpp"
-#include "sessionkeysyncpacket.hpp"
+#include "packet/sessionkeysyncpacket.hpp"
 #include <iostream>
 #include <string>
-#include <filesystem>
-#include <fstream>
 #include <mutex>
 #include <iomanip>
 #include <stdexcept>
@@ -45,7 +43,7 @@ public:
     bool addPassiveKey(uint32_t  session_id,uint32_t key_seqnum);
 
     // 获取密钥，通过request读取
-    std::string getKey(uint32_t session_id, uint32_t request_id, uint16_t request_len);
+    std::string getSessionKey(uint32_t session_id, uint32_t request_id, uint16_t request_len);
 
     // 删除会话，通过session_id删除
     bool closeSession(uint32_t session_id);

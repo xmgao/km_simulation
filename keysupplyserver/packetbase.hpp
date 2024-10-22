@@ -9,7 +9,6 @@
 // 最大的数据长度
 #define MAX_BUFFER_SIZE 1024
 #define BASE_HEADER_SIZE 4
-#define MAX_DATA_SIZE 512
 
 enum class PacketType : uint16_t
 {
@@ -19,8 +18,8 @@ enum class PacketType : uint16_t
     OPENSESSION,
     CLOSESESSION,
     SESSIONKEYSYNC,
-    MSG_TYPE_UNKNOWN,
-    ERRORMESSAGE
+    CONFIRMMESSAGE,
+    MSG_TYPE_UNKNOWN
 };
 
 // 假设 PacketBase 类已经定义并包含 buffer_ 成员

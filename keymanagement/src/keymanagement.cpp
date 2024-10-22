@@ -1,10 +1,8 @@
 #include "keymanagement.hpp"
-#include <fstream>
-#include <iostream>
 #include <sstream>
-#include <iomanip>
 #include <chrono>
 #include <thread>
+
 
 #define KEY_UNIT_SIZE 512
 
@@ -19,154 +17,105 @@ KeyManager::KeyManager()
 }
 
 // 添加密钥, 将密钥存储成本地密钥文件
-void KeyManager::addKey(int seq, const uint8_t *keyValue, size_t keySize)
-{
+void KeyManager::addKey(int seq, const uint8_t* keyValue, size_t keySize) {
     std::lock_guard<std::mutex> lock(mutex_);
-    // 将密钥转换为字符串形式并添加到map中
-    std::string keyValueStr(keyValue, keyValue + keySize);
-    keyMap_[seq] = keyValueStr;
-    count_++;
+    keyMap_[seq] = std::string(reinterpret_cast<const char*>(keyValue), keySize);
+    ++count_;
 }
 
 // 获取密钥，通过SEQ读取
-std::string KeyManager::getKey(int seq)
-{
+std::string KeyManager::getKey(int seq) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = keyMap_.find(seq);
-    if (it != keyMap_.end())
-    {
-        return it->second;
-    }
-    else
-    {
-        return ""; // 或者抛出异常
-    }
+    return it != keyMap_.end() ? it->second : ""; // 或者抛出异常
 }
 
 // 获取当前可用的最小密钥序号，方便读取密钥
-int KeyManager::getKeyinOrder(bool odd_number)
-{
+int KeyManager::getKeyinOrder(bool odd_number) {
+    std::lock_guard<std::mutex> lock(mutex_); // 防止序号在并发环境下被不当访问
 
-    if (odd_number)
-    {
-        while (seq_odd_inorder_ <= 2 * count_)
-        {
-            auto it = keyMap_.find(seq_odd_inorder_);
-            if (it != keyMap_.end())
-            {
-                seq_odd_inorder_ += 2;
-                return seq_odd_inorder_ - 2;
-            }
-            else
-            {
-                seq_odd_inorder_ += 2;
-                continue;
-            }
+    int& seq_inorder = odd_number ? seq_odd_inorder_ : seq_even_inorder_;
+    int step = odd_number ? 2 : 2;
+    
+    while (seq_inorder <= 2 * count_) {
+        if (keyMap_.find(seq_inorder) != keyMap_.end()) {
+            int result = seq_inorder;
+            seq_inorder += step;
+            return result;
         }
-    }
-    else
-    {
-        while (seq_even_inorder_ <= 2 * count_)
-        {
-            auto it = keyMap_.find(seq_even_inorder_);
-            if (it != keyMap_.end())
-            {
-                seq_even_inorder_ += 2;
-                return seq_even_inorder_ - 2;
-            }
-            else
-            {
-                seq_even_inorder_ += 2;
-                continue;
-            }
-        }
+        seq_inorder += step;
     }
     return -1; // 如果没有找到合适的文件，返回-1
 }
 
 // 删除密钥，通过SEQ删除
-void KeyManager::removeKey(int seq)
-{
+void KeyManager::removeKey(int seq) {
     std::lock_guard<std::mutex> lock(mutex_);
-    auto it = keyMap_.find(seq);
-    if (it != keyMap_.end())
-    {
-        keyMap_.erase(seq);
-        count_--;
-        delete_count_++;
+    if (keyMap_.erase(seq)) {
+        --count_;
+        ++delete_count_;
     }
 }
 
-void KeyManager::monitorKeyRate()
-{
+void KeyManager::monitorKeyRate() {
     using namespace std::chrono;
-    int last_timestamp = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+    
+    auto last_timestamp = system_clock::now();
     int last_keypool_size = count_ + delete_count_;
     int last_used_size = delete_count_;
 
-    while (true)
-    {
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::seconds(1)); // 每秒检测一次
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // 每秒检测一次
-        //上锁，进入临界区
         std::lock_guard<std::mutex> lock(mutex_);
-        int current_timestamp = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+        auto current_timestamp = system_clock::now();
         int current_keypool_size = count_ + delete_count_;
         int current_used_size = delete_count_;
 
-        int delta_timestamp = current_timestamp - last_timestamp; // 时间差，毫秒
+        auto duration = duration_cast<milliseconds>(current_timestamp - last_timestamp).count();
         int delta_keypool_size = current_keypool_size - last_keypool_size;
         int delta_used_size = current_used_size - last_used_size;
 
-        float generate_keyrate = static_cast<float>(delta_keypool_size * KEY_UNIT_SIZE) / (delta_timestamp / 1000.0);
-        float consume_keyrate = static_cast<float>(delta_used_size * KEY_UNIT_SIZE) / (delta_timestamp / 1000.0);
+        float generate_keyrate = delta_keypool_size * KEY_UNIT_SIZE * 8 / (duration / 1000.0f);
+        float consume_keyrate = delta_used_size * KEY_UNIT_SIZE * 8 / (duration / 1000.0f);
 
-        std::cout << "generate Key rate: " << generate_keyrate << " bps" << std::endl;
-        std::cout << "consume Key rate: " << consume_keyrate << " bps" << std::endl;
-        // 更新时间戳和密钥池大小
+        std::cout << "Generate Key rate: " << generate_keyrate << " bps" << std::endl;
+        std::cout << "Consume Key rate: " << consume_keyrate << " bps" << std::endl;
+
+        // 更新上次检查的时间和密钥池大小
         last_timestamp = current_timestamp;
         last_keypool_size = current_keypool_size;
         last_used_size = current_used_size;
-        //离开作用域时, lock对象销毁，自动解锁
     }
 }
 
 // 运行密钥管理
-void KeyManager::run(Server &externalserver, const std::string &keysupply_ipAddress, int keysuply_port)
-{
-    // 开始尝试连接密钥生成模拟器
+void KeyManager::run(Server& externalserver, const std::string& keysupply_ipAddress, int keysuply_port) {
     int conn_fd = -1;
-    int max_retries = 100; // 设置最大重试次数
+    const int max_retries = 100;
     int retries = 0;
-    while (conn_fd <= 0 && retries < max_retries)
-    {
+
+    while (conn_fd <= 0 && retries < max_retries) {
         conn_fd = connectToServer(keysupply_ipAddress, keysuply_port);
-        if (conn_fd <= 0)
-        {
+        if (conn_fd <= 0) {
             std::cerr << "Failed to connect, retrying..." << std::endl;
-            // 等待2秒
-            sleep(2);
-            retries++;
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            ++retries;
         }
     }
-    if (conn_fd > 0)
-    {
-        // 连接成功,添加事件上树
-        if (externalserver.epoll_fd_ >= 0)
-        {
+
+    if (conn_fd > 0) {
+        if (externalserver.epoll_fd_ >= 0) {
             addToEpoll(externalserver.epoll_fd_, conn_fd);
-        }
-        else
-        {
+        } else {
             std::cerr << "epoll_fd closed!" << std::endl;
             close(conn_fd);
         }
-    }
-    else
-    {
+    } else {
         std::cerr << "Failed to connect after " << max_retries << " attempts." << std::endl;
     }
-    // 连接后进行密钥速率检测，净速率
+
+    // 连接后进行密钥速率检测，启动密钥速率监控线程
     std::thread keyRateThread(&KeyManager::monitorKeyRate, this);
     keyRateThread.detach();
 }

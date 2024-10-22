@@ -1,119 +1,110 @@
-
-#include "packetbase.hpp"
-#include "keyrequestpacket.hpp"
-#include "opensessionpacket.hpp"
+#include "packet/packets.hpp"
 #include "sessionmanagement.hpp"
 #include "debuglevel.hpp"
 #include "handler.hpp"
 #include "server.hpp"
 
+// 声明外部的处理器注册表
 extern MessageHandlerRegistry global_registry;
 
+namespace
+{
+    void checkError(int result, const std::string &errorMsg)
+    {
+        if (result < 0)
+        {
+            throw std::runtime_error(errorMsg + ": " + std::strerror(errno));
+        }
+    }
+}
+
+// Server class implementation
 Server::Server(int port)
-    : port_(port)
+    : epoll_fd_(0), port_(port), listen_fd_(0)
 {
     listen_fd_ = createAndBindSocket(port_);
     epoll_fd_ = epoll_create1(0);
-    if (epoll_fd_ < 0)
-    {
-        perror("epoll_create1");
-        exit(EXIT_FAILURE);
-    }
+    checkError(epoll_fd_, "epoll_create1 failed");
 
+    // Add listen socket to epoll
     addToEpoll(epoll_fd_, listen_fd_);
 }
 
 Server::~Server()
 {
     close(listen_fd_);
+    close(epoll_fd_);
 }
 
 int Server::createAndBindSocket(int port)
 {
     int listen_sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (listen_sock < 0)
-    {
-        perror("socket");
-        exit(EXIT_FAILURE);
-    }
+    checkError(listen_sock, "Failed to create socket");
 
     int opt = 1;
-    if (setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
-    {
-        perror("setsockopt");
-        exit(EXIT_FAILURE);
-    }
+    checkError(setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)), "setsockopt failed");
 
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
+    sockaddr_in server_addr{};
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons((uint16_t)port);
+    server_addr.sin_port = htons(static_cast<uint16_t>(port));
 
-    if (bind(listen_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-    {
-        perror("bind");
-        exit(EXIT_FAILURE);
-    }
-
-    if (listen(listen_sock, SOMAXCONN) < 0)
-    {
-        perror("listen");
-        exit(EXIT_FAILURE);
-    }
+    checkError(bind(listen_sock, reinterpret_cast<struct sockaddr *>(&server_addr), sizeof(server_addr)), "bind failed");
+    checkError(listen(listen_sock, SOMAXCONN), "listen failed");
 
     return listen_sock;
 }
 
 void addToEpoll(int epoll_fd, int fd)
 {
-    epoll_event ev;
+    epoll_event ev{};
     ev.events = EPOLLIN;
     ev.data.fd = fd;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) < 0)
-    {
-        perror("epoll_ctl");
-        exit(EXIT_FAILURE);
-    }
+    checkError(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev), "epoll_ctl failed");
 }
 
 void Server::handleMessage(int fd)
 {
+    try
+    {
+        PacketBase pkt1;
+        ssize_t bytes_read = read(fd, pkt1.getBufferPtr(), BASE_HEADER_SIZE);
+        if (bytes_read < 0)
+        {
+            perror("read error");
+            discon(fd, epoll_fd_);
+            return;
+        }
 
-    // 创建一个 PacketBase 对象
-    PacketBase pkt1;
+        if (bytes_read == 0)
+        {
+            std::cerr << "Connection closed on socket: " << fd << std::endl;
+            discon(fd, epoll_fd_);
+            return;
+        }
 
-    // 读取packet header
-    ssize_t bytes_read = read(fd, pkt1.getBufferPtr(), BASE_HEADER_SIZE);
-    if (bytes_read < 0)
-    {
-        perror("read Error");
-        close(fd);
-    }
-    else if (bytes_read == 0)
-    {
-        // 客户端关闭了连接
-        std::cout << "Connection closed on socket: " << fd << std::endl;
-        close(fd);
-    }
-    else
-    {
         uint16_t typevalue;
         std::memcpy(&typevalue, pkt1.getBufferPtr(), sizeof(uint16_t));
-        // 解析消息类型
-        std::cout << "Server Received message! " << std::endl;
         PacketType type = parsePacketType(typevalue);
-        // 获取并调用相应的回调函数
+
+        std::cout << "Server received message of type: " << static_cast<uint16_t>(type) << std::endl;
+
+        // Get and call the appropriate handler
         MessageHandler handler = global_registry.getHandler(type);
         if (handler)
         {
-            handler(fd, pkt1);    // 一个主调度器，用函数指针和回调函数的形式分发处理任务
+            handler(fd, pkt1); // Use handler to process the packet
         }
         else
         {
-            printf("No handler registered for message type %d\n", static_cast<uint16_t>(type));
-            close(fd);
+            std::cerr << "No handler registered for message type " << static_cast<uint16_t>(type) << std::endl;
+            discon(fd, epoll_fd_);
         }
+    }
+    catch (const std::exception &ex)
+    {
+        std::cerr << "Error handling message on socket " << fd << ": " << ex.what() << std::endl;
+        discon(fd, epoll_fd_);
     }
 }
 
@@ -125,7 +116,7 @@ void Server::run()
         int nfds = epoll_wait(epoll_fd_, events.data(), events.size(), -1);
         if (nfds < 0)
         {
-            perror("epoll_wait");
+            perror("epoll_wait failed");
             exit(EXIT_FAILURE);
         }
 
@@ -138,8 +129,8 @@ void Server::run()
                 int conn_fd = accept(listen_fd_, (struct sockaddr *)&client_addr, &client_len);
                 if (conn_fd < 0)
                 {
-                    perror("accept");
-                    exit(EXIT_FAILURE);
+                    perror("accept failed");
+                    continue; // Don't exit, just continue
                 }
                 addToEpoll(epoll_fd_, conn_fd);
             }
@@ -149,80 +140,67 @@ void Server::run()
             }
         }
     }
-
-    close(epoll_fd_);
 }
 
 int connectToServer(const std::string &ipAddress, int port)
 {
-    // 创建套接字
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0)
     {
-        std::cerr << "Error creating socket" << std::endl;
+        std::cerr << "Error creating socket: " << std::strerror(errno) << std::endl;
         return -1;
     }
 
-    // 设置服务器地址
-    struct sockaddr_in server_addr;
-    std::memset(&server_addr, 0, sizeof(server_addr));
+    sockaddr_in server_addr{};
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
 
-    // 转换IP地址
     if (inet_pton(AF_INET, ipAddress.c_str(), &server_addr.sin_addr) <= 0)
     {
         std::cerr << "Invalid address/Address not supported" << std::endl;
         close(sockfd);
         return -1;
     }
-    // 发起连接
+
     if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
     {
-        std::cerr << "Connection Failed" << std::endl;
+        std::cerr << "Connection Failed: " << std::strerror(errno) << std::endl;
         close(sockfd);
         return -1;
     }
-    // 返回文件描述符
     return sockfd;
 }
 
 void discon(int fd, int epfd)
 {
-    int ret = epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL);
-    if (ret < 0)
+    if (epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nullptr) < 0)
     {
-        perror("EPOLL_CTL_DEL error...\n");
+        perror("EPOLL_CTL_DEL error");
     }
     close(fd);
 }
 
 std::string uint32ToIpString(uint32_t ipNumeric)
 {
-    struct in_addr addr;
-    addr.s_addr = htonl(ipNumeric); // 将主机字节序转换为网络字节序
+    in_addr addr;
+    addr.s_addr = htonl(ipNumeric);
 
-    char ipString[INET_ADDRSTRLEN]; // INET_ADDRSTRLEN是足够存储IPv4地址的字符串长度
+    char ipString[INET_ADDRSTRLEN];
     if (inet_ntop(AF_INET, &addr, ipString, INET_ADDRSTRLEN) == nullptr)
     {
-        // 错误处理
         std::cerr << "Conversion failed." << std::endl;
         return "";
     }
     return std::string(ipString);
 }
 
-// 将IP地址字符串转换为uint32_t
 uint32_t IpStringTouint32(const std::string &ipString)
 {
-    struct in_addr addr;
-    // 将字符串形式的IP转换为网络字节序的二进制格式
+    in_addr addr;
     if (inet_pton(AF_INET, ipString.c_str(), &addr) != 1)
     {
-        // 错误处理
         std::cerr << "Conversion failed." << std::endl;
         return 0;
     }
-    // 将网络字节序转换为主机字节序
     return ntohl(addr.s_addr);
 }
