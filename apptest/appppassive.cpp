@@ -176,7 +176,7 @@ int main(int argc, char *argv[])
     uint32_t request_id = 1;
 
     // 连接成功，进入解密循环
-    while (request_id < 20)
+    while (request_id <= 30)
     {
         // 读取主动端APP加密数据包
         char buffer[512];

@@ -1,6 +1,7 @@
 #include "opensessionpacket.hpp"
 #include "keyrequestpacket.hpp"
 #include "Encryptor.hpp"
+#include "confirmmessagepacket.hpp"
 #include <sys/epoll.h>
 #include <netinet/in.h>
 #include <iostream>
@@ -17,6 +18,53 @@
 
 const int LISTEN_PORT = 50000;     // KM监听端口
 const int APP_LISTEN_PORT = 50001; // APP监听端口
+
+bool reciveconfirmmessage(int conn_KM_fd)
+{
+    // 处理返回结果
+    ConfirmMessagePacket response_pkt;
+
+    // 读取 packet header
+    ssize_t bytes_read = read(conn_KM_fd, response_pkt.getBufferPtr(), BASE_HEADER_SIZE);
+    if (bytes_read <= 0)
+    {
+        std::cerr << "Failed to read response header or connection closed." << std::endl;
+        close(conn_KM_fd);
+        return false;
+    }
+
+    uint16_t value1, length;
+    std::memcpy(&value1, response_pkt.getBufferPtr(), sizeof(uint16_t));
+    std::memcpy(&length, response_pkt.getBufferPtr() + sizeof(uint16_t), sizeof(uint16_t));
+
+    // 读取 payload
+    bytes_read = read(conn_KM_fd, response_pkt.getBufferPtr() + BASE_HEADER_SIZE, length);
+    if (bytes_read != length)
+    {
+        std::cerr << "Incomplete payload read. Expected: " << std::to_string(length) << ", got: " << std::to_string(bytes_read) << std::endl;
+        close(conn_KM_fd);
+        return false;
+    }
+
+    response_pkt.setBufferSize(BASE_HEADER_SIZE + length);
+    if (value1 == static_cast<uint16_t>(PacketType::CONFIRMMESSAGE))
+    {
+        if (*response_pkt.geterrortypePtr() == static_cast<uint32_t>(ErrorCode::SUCCESS))
+        {
+            return true;
+        }
+        else
+        {
+            std::cerr << "Cannot open passive session, error code: " << std::to_string(*response_pkt.geterrortypePtr()) << std::endl;
+        }
+    }
+    else
+    {
+        std::cerr << "Received unexpected message type: " << std::to_string(value1) << std::endl;
+    }
+    close(conn_KM_fd);
+    return false;
+}
 
 int connectToServer(const std::string &ipAddress, int port)
 {
@@ -127,8 +175,13 @@ int main(int argc, char *argv[])
     uint32_t sourceip = IpStringTouint32(proactiveAPP_ipAddress);
     uint32_t desip = IpStringTouint32(passiveAPP_ipAddress);
     uint32_t session_id = 1;
-    pkt1.constructopensessionpacket(sourceip, desip, session_id, true);
+    pkt1.constructopensessionpacket(sourceip, desip, session_id, false);
     send(conn_KM_fd, pkt1.getBufferPtr(), pkt1.getBufferSize(), 0);
+
+    if (!reciveconfirmmessage(conn_KM_fd))
+    {
+        std::cerr << "Failed to connect receive confirm message" << std::endl;
+    }
 
     // 连接被动端APP
     int conn_PassiveAPP_fd = connectToServer(passiveAPP_ipAddress, APP_LISTEN_PORT);
@@ -193,12 +246,12 @@ int main(int argc, char *argv[])
         else
         {
             perror("getkey Error");
+            sleep(1);
             goto label1;
         }
 
         // 加密数据
-        std::string plaintext = "This is the data to be encrypted.";
-        std::string ciphertext;
+        std::string plaintext = "This is the data to be encrypted." + std::to_string(request_id);
         if (Encryptor::encrypt(plaintext, getkeyvalue, ciphertext))
         {
             std::cout << "Ciphertext: ";
@@ -228,6 +281,6 @@ int main(int argc, char *argv[])
 
     // 关闭会话
     OpenSessionPacket closepkt;
-    closepkt.constructclosesessionpacket(sourceip, desip, session_id, true);
+    closepkt.constructclosesessionpacket(sourceip, desip, session_id, false);
     send(conn_KM_fd, closepkt.getBufferPtr(), closepkt.getBufferSize(), 0);
 }

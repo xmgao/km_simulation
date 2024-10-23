@@ -110,6 +110,11 @@
     "stdexcept": "cpp",
     "stop_token": "cpp",
     "streambuf": "cpp",
-    "thread": "cpp"
+    "thread": "cpp",
+    "codecvt": "cpp",
+    "condition_variable": "cpp",
+    "csignal": "cpp",
+    "map": "cpp",
+    "mutex": "cpp"
   }
 }

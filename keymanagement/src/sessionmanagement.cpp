@@ -116,50 +116,8 @@ bool SessionManager::noticePassiveSession(SessionData &data, uint32_t session_id
         close(data.fd_);
         return false;
     }
-    // 处理返回结果
-    ConfirmMessagePacket response_pkt;
-
-    // 读取 packet header
-    ssize_t bytes_read = read(data.fd_, response_pkt.getBufferPtr(), BASE_HEADER_SIZE);
-    if (bytes_read <= 0)
-    {
-        logError("Failed to read response header or connection closed.");
-        close(data.fd_);
-        return false;
-    }
-
-    uint16_t value1, length;
-    std::memcpy(&value1, response_pkt.getBufferPtr(), sizeof(uint16_t));
-    std::memcpy(&length, response_pkt.getBufferPtr() + sizeof(uint16_t), sizeof(uint16_t));
-
-    // 读取 payload
-    bytes_read = read(data.fd_, response_pkt.getBufferPtr() + BASE_HEADER_SIZE, length);
-    if (bytes_read != length)
-    {
-        logError("Incomplete payload read. Expected: " + std::to_string(length) + ", got: " + std::to_string(bytes_read));
-        close(data.fd_);
-        return false;
-    }
-
-    response_pkt.setBufferSize(BASE_HEADER_SIZE + length);
-
-    if (value1 == static_cast<uint16_t>(PacketType::CONFIRMMESSAGE))
-    {
-        if (*response_pkt.geterrortypePtr() == static_cast<uint32_t>(ErrorCode::SUCCESS))
-        {
-            return true;
-        }
-        else
-        {
-            logError("Cannot open passive session, error code: " + std::to_string(*response_pkt.geterrortypePtr()));
-        }
-    }
-    else
-    {
-        logError("Received unexpected message type: " + std::to_string(value1));
-    }
-    close(data.fd_);
-    return false;
+    //只要send成功被动端一定会正确处理打开会话，故返回true
+    return true;
 }
 
 std::string SessionManager::getSessionKey(uint32_t session_id, uint32_t request_id, uint16_t request_len)
@@ -170,7 +128,7 @@ std::string SessionManager::getSessionKey(uint32_t session_id, uint32_t request_
     {
         while (it->second.keyValue.size() - it->second.index_ < request_len)
         {
-            if (!it->second.is_inbound_ || !addKeyToSession(it->second, true))
+            if (it->second.is_inbound_ || !addKeyToSession(it->second, true))
             {
                 logError("Insufficient key materials.");
                 return "";

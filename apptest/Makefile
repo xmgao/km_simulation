@@ -2,11 +2,11 @@ CC = g++
 CFLAGS = -std=c++17
 
 # 目标文件
-TARGETS = appproactive apppasive
+TARGETS = appproactive apppassive
 
 # 公共源文件和头文件
-COMMON_SOURCES = Encryptor.cpp keyrequestpacket.cpp opensessionpacket.cpp packetbase.cpp
-COMMON_HEADERS = Encryptor.hpp keyrequestpacket.hpp opensessionpacket.hpp packetbase.hpp
+COMMON_SOURCES = Encryptor.cpp keyrequestpacket.cpp opensessionpacket.cpp packetbase.cpp confirmmessagepacket.cpp
+COMMON_HEADERS = Encryptor.hpp keyrequestpacket.hpp opensessionpacket.hpp packetbase.hpp confirmmessagepacket.hpp
 
 # 特定的源文件
 PROACTIVE_SRC = appproactive.cpp
@@ -21,7 +21,7 @@ all: $(TARGETS)
 appproactive: $(PROACTIVE_OBJ) $(COMMON_SOURCES:.cpp=.o)
 	$(CC) $^ -o $@ $(CFLAGS)
 
-apppasive: $(PASSIVE_OBJ) $(COMMON_SOURCES:.cpp=.o)
+apppassive: $(PASSIVE_OBJ) $(COMMON_SOURCES:.cpp=.o)
 	$(CC) $^ -o $@ $(CFLAGS)
 
 # 通用的cpp文件编译规则
