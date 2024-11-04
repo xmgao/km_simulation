@@ -21,7 +21,10 @@ PacketBase::PacketBase(PacketBase &&other) noexcept
     other.buffer_size_ = 0;
 }
 
-PacketBase::~PacketBase() = default;
+PacketBase::~PacketBase()
+{
+    delete[] buffer_;
+}
 
 uint8_t *PacketBase::getBufferPtr()
 {

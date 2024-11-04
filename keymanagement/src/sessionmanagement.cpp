@@ -89,10 +89,13 @@ bool SessionManager::addSession(uint32_t sourceip, uint32_t desip, uint32_t sess
     newSessionData.desip_ = desip;
     newSessionData.session_id_ = session_id;
     newSessionData.is_inbound_ = is_inbound;
-    if (!is_inbound && !noticePassiveSession(newSessionData, session_id))
+    if (!is_inbound)
     {
-        logError("Failed to open session!.");
-        return false;
+        if (!noticePassiveSession(newSessionData, session_id))
+        {
+            logError("Failed to open session!.");
+            return false;
+        }
     }
     SessionkeyCache_[session_id] = std::move(newSessionData);
     ++session_number;
@@ -116,7 +119,7 @@ bool SessionManager::noticePassiveSession(SessionData &data, uint32_t session_id
         close(data.fd_);
         return false;
     }
-    //只要send成功被动端一定会正确处理打开会话，故返回true
+    // 只要send成功被动端一定会正确处理打开会话，故返回true
     return true;
 }
 

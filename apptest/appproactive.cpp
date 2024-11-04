@@ -252,6 +252,7 @@ int main(int argc, char *argv[])
 
         // ¼ÓÃÜÊı¾İ
         std::string plaintext = "This is the data to be encrypted." + std::to_string(request_id);
+        std::string ciphertext;
         if (Encryptor::encrypt(plaintext, getkeyvalue, ciphertext))
         {
             std::cout << "Ciphertext: ";
