@@ -131,6 +131,8 @@ std::string SessionManager::getSessionKey(uint32_t session_id, uint32_t request_
     {
         while (it->second.keyValue.size() - it->second.index_ < request_len)
         {
+            //首先检查是不是被动端，如果是被动端说明主动端密钥不足或者密钥未同步过来，此时输出密钥不足。
+            //如果是主动端则进行addKeyToSession(),如果密钥不足则会返回失败，输出密钥不足；如果密钥获取成功则将密钥同步给被动端。
             if (it->second.is_inbound_ || !addKeyToSession(it->second, true))
             {
                 logError("Insufficient key materials.");

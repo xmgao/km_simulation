@@ -42,6 +42,8 @@ private:
     int seq_odd_inorder_;
     // 当前按照顺序的最小偶数密钥序号
     int seq_even_inorder_;
+     // 当前最大密钥序号
+    int seq_max_;
     
     std::unordered_map<int, std::string> keyMap_; // 用于存储密钥,密钥块用char buffer[]或vector<unint_8>
 };
