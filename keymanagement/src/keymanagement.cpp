@@ -88,11 +88,11 @@ void KeyManager::monitorKeyRate()
         int delta_keypool_size = current_keypool_size - last_keypool_size;
         int delta_used_size = current_used_size - last_used_size;
 
-        float generate_keyrate = delta_keypool_size * KEY_UNIT_SIZE * 8 / (duration / 1000.0f);
-        float consume_keyrate = delta_used_size * KEY_UNIT_SIZE * 8 / (duration / 1000.0f);
+        // float generate_keyrate = delta_keypool_size * KEY_UNIT_SIZE * 8 / (duration / 1000.0f);
+        // float consume_keyrate = delta_used_size * KEY_UNIT_SIZE * 8 / (duration / 1000.0f);
 
-        std::cout << "Generate Key rate: " << generate_keyrate << " bps" << std::endl;
-        std::cout << "Consume Key rate: " << consume_keyrate << " bps" << std::endl;
+        // std::cout << "Generate Key rate: " << generate_keyrate << " bps" << std::endl;
+        // std::cout << "Consume Key rate: " << consume_keyrate << " bps" << std::endl;
 
         // 更新上次检查的时间和密钥池大小
         last_timestamp = current_timestamp;

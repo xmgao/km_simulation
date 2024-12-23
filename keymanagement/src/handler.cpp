@@ -111,6 +111,14 @@ void handleKeyRequestPacket(int fd, PacketBase &pkt1)
     KeyRequestPacket pkt3;
     pkt3.constructkeyreturnpacket(session_id, request_id, request_len, getkeyvalue);
     send(fd, pkt3.getBufferPtr(), pkt3.getBufferSize(), 0);
+    if (DEBUG_LEVEL == 1)
+    {
+        std::cout << "send KEYRETURN packet:"
+                  << " session_id: " << session_id
+                  << " request_id: " << request_id
+                  << " request_len: " << request_len
+                  << std::endl;
+    }
 }
 
 // ´¦ÀíCLOSESESSION
@@ -163,7 +171,7 @@ void handleKeySupplyPacket(int fd, PacketBase &pkt1)
     KeySupplyPacket pkt2(std::move(pkt1));
     uint32_t seqnumber = *pkt2.getSeqPtr();
 
-    if (DEBUG_LEVEL == 1)
+    if (DEBUG_LEVEL <= 0)
     {
         std::cout << "Received KEYSUPPLY packet:"
                   << " seqnumber: " << seqnumber
@@ -199,7 +207,11 @@ void handleSessionKeySyncPacket(int fd, PacketBase &pkt1)
                   << std::endl;
     }
 
-    if (!globalSessionManager.addPassiveKey(session_id, keyseqnumber))
+    if (globalSessionManager.addPassiveKey(session_id, keyseqnumber))
+    {
+        std::cout << "add passive session key success." << std::endl;
+    }
+    else
     {
         std::cerr << "Unable to add passive session key." << std::endl;
     }

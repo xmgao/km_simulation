@@ -87,7 +87,7 @@ void Server::handleMessage(int fd)
         std::memcpy(&typevalue, pkt1.getBufferPtr(), sizeof(uint16_t));
         PacketType type = parsePacketType(typevalue);
 
-        std::cout << "Server received message of type: " << static_cast<uint16_t>(type) << std::endl;
+        //std::cout << "Server received message of type: " << static_cast<uint16_t>(type) << std::endl;
 
         // Get and call the appropriate handler
         MessageHandler handler = global_registry.getHandler(type);

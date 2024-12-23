@@ -21,14 +21,17 @@ extern int LISTEN_PORT;
 
 SessionManager::SessionManager() : session_number(0) {}
 
-void keysync(SessionData &data, uint32_t keyseqnum)
+bool keysync(SessionData &data, uint32_t keyseqnum)
 {
     SessionKeySyncPacket pkt1;
     pkt1.constructsessionkeysyncpacket(data.session_id_, keyseqnum);
     if (send(data.fd_, pkt1.getBufferPtr(), pkt1.getBufferSize(), 0) == -1)
     {
         logError("Failed to send message during key synchronization.");
+        return false;
     }
+    std::cout << "keysync message send,seq number" << keyseqnum << std::endl;
+    return true;
 }
 
 bool addKeyToSession(SessionData &data, bool isProactive)
@@ -48,7 +51,7 @@ bool addKeyToSession(SessionData &data, bool isProactive)
 
     if (isProactive)
     {
-        keysync(data, seq);
+        return keysync(data, seq); //发送keysync消息
     }
 
     return true;
@@ -131,8 +134,8 @@ std::string SessionManager::getSessionKey(uint32_t session_id, uint32_t request_
     {
         while (it->second.keyValue.size() - it->second.index_ < request_len)
         {
-            //首先检查是不是被动端，如果是被动端说明主动端密钥不足或者密钥未同步过来，此时输出密钥不足。
-            //如果是主动端则进行addKeyToSession(),如果密钥不足则会返回失败，输出密钥不足；如果密钥获取成功则将密钥同步给被动端。
+            // 首先检查是不是被动端，如果是被动端说明主动端密钥不足或者密钥未同步过来，此时输出密钥不足。
+            // 如果是主动端则进行addKeyToSession(),如果密钥不足则会返回失败，输出密钥不足；如果密钥获取成功则将密钥同步给被动端。
             if (it->second.is_inbound_ || !addKeyToSession(it->second, true))
             {
                 logError("Insufficient key materials.");
